@@ -1,14 +1,18 @@
 # 📚 CLI Base
 
+[![Language](https://img.shields.io/badge/Language-Go-blue)](https://golang.org/)
+[![Go Version](https://img.shields.io/github/go-mod/go-version/shouni/clibase)](https://golang.org/)
+[![GitHub tag (latest by date)](https://img.shields.io/github/v/tag/shouni/clibase)](https://github.com/shouni/clibase/tags)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
 **`clibase`** は、Go言語でコマンドラインインターフェース (CLI) アプリケーションを迅速に構築するための、**`spf13/cobra`** ベースの共通基盤を提供するパッケージです。
 
 ## ✨ 特徴
 
 * **`cobra` ベース**: 強力なCLI構築ライブラリ **`spf13/cobra`** を基盤としています。
 * **構造体による宣言的定義**: `clibase.App` 構造体に必要な要素を渡すだけで、ボイラープレートを排除した綺麗な `main` 関数を実現します。
-* **ライフサイクル管理 (NEW!)**: `PreRunE` による実行前チェックに加え、`PostRun` による確実なリソース解放（クローズ処理など）をサポートします。
-* **共通フラグの標準提供**: `verbose` (`-V`) と `config` (`-C`) の2つの永続フラグを標準で提供。
-* **安全な設定アクセス**: 共通フラグの値は `clibase.GetConfig()` を通じて読み取り専用として安全にアクセス可能です。
+* **ライフサイクル管理**: `PreRunE` による初期化に加え、`PostRun` による確実なリソース解放（クローズ処理など）を標準サポート。
+* **共通フラグの標準提供**: `verbose` (`-V`) と `config` (`-C`) を標準提供。
 
 ---
 
