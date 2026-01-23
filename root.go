@@ -38,7 +38,7 @@ func Execute(app App) {
 		Short: fmt.Sprintf("%s CLI tool", app.Name),
 		Long:  fmt.Sprintf("%s is a CLI application built with shouni/clibase.", app.Name),
 
-		// 共通処理とカスタム処理を統合
+		// アプリケーション固有の実行前処理を呼び出す
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 			// アプリ固有の PreRunE 処理を実行
 			if app.PreRunE != nil {
