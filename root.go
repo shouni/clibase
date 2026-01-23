@@ -17,6 +17,7 @@ type Config struct {
 var globalConfig Config
 
 // GetConfig は現在の設定情報のコピーを返します。
+// これにより、利用側は読み取り専用として安全に設定を参照できます。
 func GetConfig() Config {
 	return globalConfig
 }
@@ -39,12 +40,7 @@ func Execute(app App) {
 
 		// 共通処理とカスタム処理を統合
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
-			// 1. 共通ロジック (将来的な標準ロガーのレベル設定などを想定)
-			if globalConfig.Verbose {
-				// 共通の詳細ログ設定などをここに記述可能
-			}
-
-			// 2. アプリ固有の PreRunE 処理を実行
+			// アプリ固有の PreRunE 処理を実行
 			if app.PreRunE != nil {
 				return app.PreRunE(cmd, args)
 			}
@@ -59,10 +55,9 @@ func Execute(app App) {
 		},
 
 		// 引数なしで実行された場合にヘルプを表示
-		Run: func(cmd *cobra.Command, args []string) {
-			if err := cmd.Help(); err != nil {
-				fmt.Fprintf(os.Stderr, "Error displaying help: %v\n", err)
-			}
+		// RunE にすることで、エラーハンドリングを上位の Execute() に委ねます
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return cmd.Help()
 		},
 	}
 
@@ -82,6 +77,7 @@ func Execute(app App) {
 
 	// 実行
 	if err := rootCmd.Execute(); err != nil {
+		// Cobraがエラーを出力するため、ここでは適切な終了コードで終了します
 		os.Exit(1)
 	}
 }
