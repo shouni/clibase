@@ -7,14 +7,19 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// Config は共通フラグの値を保持します。
+// Config は共通フラグの値を保持する内部構造体です。
 type Config struct {
 	Verbose    bool
 	ConfigFile string
 }
 
-// GlobalConfig はアプリケーション全体で共有される設定です。
-var GlobalConfig Config
+// globalConfig はパッケージ内でのみ変更可能な設定情報の格納先です。
+var globalConfig Config
+
+// GetConfig は現在の設定情報のコピーを返します。
+func GetConfig() Config {
+	return globalConfig
+}
 
 // App は CLI アプリケーションの構成を定義します。
 type App struct {
@@ -31,11 +36,10 @@ func Execute(app App) {
 		Short: fmt.Sprintf("%s CLI tool", app.Name),
 		Long:  fmt.Sprintf("%s is a CLI application built with shouni/clibase.", app.Name),
 
-		// 共通処理とカスタム処理を統合
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
-			// 1. 共通ロジック (将来的なロギング基盤の初期化などを想定)
-			if GlobalConfig.Verbose {
-				// 例: log.SetLevel(log.DebugLevel)
+			// 1. 共通ロジック
+			if globalConfig.Verbose {
+				// 必要に応じて共通のロギング初期化などを実行
 			}
 
 			// 2. カスタムロジックの実行
@@ -44,18 +48,16 @@ func Execute(app App) {
 			}
 			return nil
 		},
-		// 引数なしで実行された場合にヘルプを表示
 		Run: func(cmd *cobra.Command, args []string) {
 			if err := cmd.Help(); err != nil {
-				// ヘルプ表示のエラーは致命的ではないが、デバッグのために標準エラー出力へ出す
 				fmt.Fprintf(os.Stderr, "Error displaying help: %v\n", err)
 			}
 		},
 	}
 
-	// 共通フラグの登録
-	rootCmd.PersistentFlags().BoolVarP(&GlobalConfig.Verbose, "verbose", "V", false, "Enable verbose output")
-	rootCmd.PersistentFlags().StringVarP(&GlobalConfig.ConfigFile, "config", "C", "", "Config file path")
+	// 共通フラグの登録（バインド先を非公開変数に変更）
+	rootCmd.PersistentFlags().BoolVarP(&globalConfig.Verbose, "verbose", "V", false, "Enable verbose output")
+	rootCmd.PersistentFlags().StringVarP(&globalConfig.ConfigFile, "config", "C", "", "Config file path")
 
 	// アプリ固有フラグの登録
 	if app.AddFlags != nil {
@@ -69,7 +71,6 @@ func Execute(app App) {
 
 	// 実行
 	if err := rootCmd.Execute(); err != nil {
-		// cobra は内部でエラーメッセージを出力するため、ここでは Exit のみ行う
 		os.Exit(1)
 	}
 }

@@ -68,13 +68,14 @@ func main() {
 var helloCmd = &cobra.Command{
     Use:   "hello",
     Short: "Prints a greeting",
-    Run: func(cmd *cobra.Command, args []string) {
-        fmt.Println("Hello!")
-        // 共通フラグの値を確認
-        if clibase.GlobalConfig.Verbose {
-            fmt.Printf("Debug: Config file is %s\n", clibase.GlobalConfig.ConfigFile)
-        }
-    },
+	Run: func(cmd *cobra.Command, args []string) {
+		fmt.Println("Hello!")
+		// 共通フラグの値を確認
+		cfg := clibase.GetConfig()
+		if cfg.Verbose {
+			fmt.Printf("Debug: Config file is %s\n", cfg.ConfigFile)
+		}
+	},
 }
 
 ```
