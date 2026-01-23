@@ -7,77 +7,66 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// GlobalFlags は、すべてのコマンドで利用できる共通フラグを保持する構造体です。
-// アプリケーション側から clibase.Flags.Verbose のようにアクセスできます。
-type GlobalFlags struct {
+// Config は共通フラグの値を保持します。
+// グローバルな Flags 変数を廃止し、この構造体に集約します。
+type Config struct {
 	Verbose    bool
 	ConfigFile string
 }
 
-var Flags GlobalFlags
+// GlobalConfig はアプリケーション全体で共有される設定です。
+var GlobalConfig Config
 
-// CustomFlagFunc は、アプリケーション固有の永続フラグを追加するためのコールバック関数の型です。
-type CustomFlagFunc func(rootCmd *cobra.Command)
-
-// CustomPreRunEFunc は、アプリケーション固有の実行前チェック（エラーを返すことが可能）のためのコールバック関数の型です。
-type CustomPreRunEFunc func(cmd *cobra.Command, args []string) error
-
-// createPreRunE は、clibase共通のPersistentPreRunEロジックとアプリケーション固有のロジックを結合した関数を作成します。
-func createPreRunE(preRunE CustomPreRunEFunc) func(cmd *cobra.Command, args []string) error {
-	return func(cmd *cobra.Command, args []string) error {
-		// 1. clibase 共通の PersistentPreRun 処理
-		if Flags.Verbose {
-			// ロギングライブラリの初期化などをここで行うことを想定しています。
-			// 例: log.SetLevel(log.DebugLevel)
-		}
-		// 設定ファイル読み込みロジックなどをここに記述
-
-		// 2. アプリケーション固有の PersistentPreRunE 処理を実行
-		if preRunE != nil {
-			return preRunE(cmd, args)
-		}
-		return nil
-	}
+// App は CLI アプリケーションの構成を定義します。
+type App struct {
+	Name     string
+	AddFlags func(cmd *cobra.Command)
+	PreRunE  func(cmd *cobra.Command, args []string) error
+	Commands []*cobra.Command
 }
 
-// NewRootCmd は、指定されたアプリケーション名に基づいてルートコマンドの基盤を生成します。
-// アプリケーション固有のフラグ追加や、PersistentPreRunE のロジックを注入できます。
-//
-// 注意: Short, Longなどのユーザーに見える文字列には、全角スペース・U+00A0 (ノーブレークスペース) を含めないでください。
-func NewRootCmd(appName string, addFlags CustomFlagFunc, preRunE CustomPreRunEFunc) *cobra.Command {
+// Execute は、アプリケーションの構築と実行をワンストップで行います。
+func Execute(app App) {
 	rootCmd := &cobra.Command{
-		Use:   appName,
-		Short: fmt.Sprintf("A CLI tool for %s.", appName),
-		Long:  fmt.Sprintf("The CLI tool for %s. Use a subcommand to perform a task.", appName),
+		Use:   app.Name,
+		Short: fmt.Sprintf("%s CLI tool", app.Name),
+		Long:  fmt.Sprintf("%s is a CLI application built with shouni/cli.", app.Name),
 
-		// PersistentPreRunEを外部関数に分離し、ロジックを注入
-		PersistentPreRunE: createPreRunE(preRunE),
+		// 共通処理とカスタム処理を統合
+		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+			// 1. 共通ロジック (例: Verbose モードの反映)
+			if GlobalConfig.Verbose {
+				// ここで logger のレベル設定などを行う
+			}
 
-		// Run は通常、Help表示などに利用されます
+			// 2. カスタムロジックの実行
+			if app.PreRunE != nil {
+				return app.PreRunE(cmd, args)
+			}
+			return nil
+		},
 		Run: func(cmd *cobra.Command, args []string) {
-			cmd.Help()
+			_ = cmd.Help()
 		},
 	}
 
-	// 共通フラグの定義 (永続フラグとして定義することで、全てのサブコマンドで利用可能)
-	rootCmd.PersistentFlags().BoolVarP(&Flags.Verbose, "verbose", "V", false, "Enable verbose output")
-	rootCmd.PersistentFlags().StringVarP(&Flags.ConfigFile, "config", "C", "", "Config file path")
+	// 共通フラグの登録
+	rootCmd.PersistentFlags().BoolVarP(&GlobalConfig.Verbose, "verbose", "V", false, "enable verbose output")
+	rootCmd.PersistentFlags().StringVarP(&GlobalConfig.ConfigFile, "config", "C", "", "config file path")
 
-	// アプリケーション固有のフラグを追加
-	if addFlags != nil {
-		addFlags(rootCmd)
+	// アプリ固有フラグの登録
+	if app.AddFlags != nil {
+		app.AddFlags(rootCmd)
 	}
 
-	return rootCmd
-}
+	// サブコマンドの追加
+	if len(app.Commands) > 0 {
+		rootCmd.AddCommand(app.Commands...)
+	}
 
-// Execute は、CLIアプリケーションのエントリポイントです。
-// アプリケーション固有のサブコマンドとカスタマイズ関数をルートコマンドに追加し、実行します。
-func Execute(appName string, addFlags CustomFlagFunc, preRunE CustomPreRunEFunc, cmds ...*cobra.Command) {
-	rootCmd := NewRootCmd(appName, addFlags, preRunE)
-	rootCmd.AddCommand(cmds...)
-
+	// 実行
 	if err := rootCmd.Execute(); err != nil {
+		// cobra はデフォルトでエラーを出力するため、ここでは Exit のみ
 		os.Exit(1)
 	}
 }
