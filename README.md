@@ -11,8 +11,10 @@
 
 * **`cobra` ベース**: 強力なCLI構築ライブラリ **`spf13/cobra`** を基盤としています。
 * **構造体による宣言的定義**: `clibase.App` 構造体に必要な要素を渡すだけで、ボイラープレートを排除した綺麗な `main` 関数を実現します。
-* **ライフサイクル管理**: `PreRunE` による初期化に加え、`PostRun` による確実なリソース解放（クローズ処理など）を標準サポート。
+* **ライフサイクル管理**: `PreRunE` による初期化に加え、`PostRun` による確実なリソース解放（クローズ処理など）を標準サポート。サブコマンドが独自の `PersistentPreRunE`/`PersistentPostRun` を定義していても、root の hook は必ず実行されます。
 * **共通フラグの標準提供**: `verbose` (`-V`) と `config` (`-C`) を標準提供。
+* **`--version` フラグ**: `App.Version` を指定するだけで cobra 標準の `--version` が有効になります。
+* **シグナル対応**: `Execute` は SIGINT/SIGTERM を受け取ると `context` をキャンセルするため、`cmd.Context()` で中断を検知できます。`ExecuteContext` を使えば独自のコンテキストや終了コード制御も可能です。
 
 ---
 
@@ -103,19 +105,38 @@ var helloCmd = &cobra.Command{
 | `--verbose` | `-V` | 詳細ログの有効化 | `clibase.GetConfig().Verbose` |
 | `--config` | `-C` | 設定ファイルのパス指定 | `clibase.GetConfig().ConfigFile` |
 
+> **注意**: 独自フラグで `-V` / `-C` のショートハンドを再利用すると cobra が起動時にパニックします。`AddFlags` では別のショートハンドを使ってください。
+
 ### 内部構造: `clibase.App`
 
 アプリケーションの構成を定義する中心的な構造体です。
 
 ```go
 type App struct {
-    Name     string                                    // アプリ名
-    AddFlags func(cmd *cobra.Command)                  // フラグ登録フック
+    Name string // アプリ名
+
+    Version       string // 指定すると --version フラグが有効になる
+    SilenceUsage  bool   // true でエラー時の usage 自動出力を抑制
+    SilenceErrors bool   // true で cobra によるエラーメッセージ自動出力を抑制
+
+    AddFlags func(cmd *cobra.Command)                      // フラグ登録フック
     PreRunE  func(cmd *cobra.Command, args []string) error // 実行前チェック/初期化
     PostRun  func(cmd *cobra.Command, args []string)       // 実行後クリーンアップ
-    Commands []*cobra.Command                          // サブコマンド群
+    Commands []*cobra.Command                              // サブコマンド群
 }
 
+```
+
+### `Execute` と `ExecuteContext`
+
+* `clibase.Execute(app)` — 従来通りの一発実行 API。内部で SIGINT/SIGTERM 監視用の `context` を用意し、エラー時は `os.Exit(1)` します。
+* `clibase.ExecuteContext(ctx, app)` — `os.Exit` を呼ばずにエラーを返します。独自のキャンセル文脈を渡したい場合や、終了コードを自分で制御したい場合に使用します。
+
+```go
+if err := clibase.ExecuteContext(ctx, app); err != nil {
+    // 呼び出し側で終了コードやログ出力を制御できる
+    os.Exit(2)
+}
 ```
 
 ---
