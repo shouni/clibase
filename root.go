@@ -1,8 +1,11 @@
 package clibase
 
 import (
+	"context"
 	"fmt"
 	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/spf13/cobra"
 )
@@ -14,6 +17,8 @@ type Config struct {
 }
 
 // globalConfig はパッケージ内でのみ変更可能な設定情報の格納先です。
+// Execute/ExecuteContext はプロセスにつき一度だけ呼び出される想定のため、
+// 同時実行に対する排他制御は行っていません。
 var globalConfig Config
 
 // GetConfig は現在の設定情報のコピーを返します。
@@ -24,23 +29,41 @@ func GetConfig() Config {
 
 // App は CLI アプリケーションの構成を定義します。
 type App struct {
-	Name     string
+	Name string
+
+	// Version を指定すると cobra 標準の --version フラグが有効になります。
+	Version string
+
+	// SilenceUsage / SilenceErrors は cobra のエラー時自動出力を抑制します。
+	// 実行時エラーのたびに usage 全文が出るのを避けたい場合は true にします。
+	SilenceUsage  bool
+	SilenceErrors bool
+
 	AddFlags func(cmd *cobra.Command)                      // 独自フラグ登録用
 	PreRunE  func(cmd *cobra.Command, args []string) error // 実行前バリデーション/初期化用
 	PostRun  func(cmd *cobra.Command, args []string)       // 実行後のリソース解放用
 	Commands []*cobra.Command                              // サブコマンド群
 }
 
-// Execute は、アプリケーションの構築と実行をワンストップで行います。
-func Execute(app App) {
+// buildRootCmd は App の設定から cobra のルートコマンドを構築します。
+func buildRootCmd(app App) *cobra.Command {
+	// サブコマンドが独自の PersistentPreRunE/PersistentPostRun を定義していても
+	// root の hook が無視されないようにします。
+	// cobra のデフォルトではコマンドツリー中「最も近い」hook しか実行されないため、
+	// このフラグなしでは app.PreRunE/PostRun がサブコマンド実行時に呼ばれません。
+	cobra.EnableTraverseRunHooks = true
+
 	rootCmd := &cobra.Command{
-		Use:   app.Name,
-		Short: fmt.Sprintf("%s CLI tool", app.Name),
-		Long:  fmt.Sprintf("%s is a CLI application built with shouni/clibase.", app.Name),
+		Use:     app.Name,
+		Short:   fmt.Sprintf("%s CLI tool", app.Name),
+		Long:    fmt.Sprintf("%s is a CLI application built with shouni/clibase.", app.Name),
+		Version: app.Version,
+
+		SilenceUsage:  app.SilenceUsage,
+		SilenceErrors: app.SilenceErrors,
 
 		// アプリケーション固有の実行前処理を呼び出す
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
-			// アプリ固有の PreRunE 処理を実行
 			if app.PreRunE != nil {
 				return app.PreRunE(cmd, args)
 			}
@@ -75,8 +98,24 @@ func Execute(app App) {
 		rootCmd.AddCommand(app.Commands...)
 	}
 
-	// 実行
-	if err := rootCmd.Execute(); err != nil {
+	return rootCmd
+}
+
+// ExecuteContext は App からルートコマンドを構築し、ctx を伝搬させて実行します。
+// os.Exit を呼ばずにエラーを返すため、終了コードの制御や独自のキャンセル文脈を
+// 呼び出し側で扱いたい場合に使用します。
+func ExecuteContext(ctx context.Context, app App) error {
+	return buildRootCmd(app).ExecuteContext(ctx)
+}
+
+// Execute は、アプリケーションの構築と実行をワンストップで行います。
+// SIGINT/SIGTERM を受信すると ctx をキャンセルするため、PreRunE/PostRun や
+// 各コマンドの Run 内で cmd.Context() を参照すれば中断処理に反応できます。
+func Execute(app App) {
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	if err := ExecuteContext(ctx, app); err != nil {
 		// Cobraがエラーを出力するため、ここでは適切な終了コードで終了します
 		os.Exit(1)
 	}
