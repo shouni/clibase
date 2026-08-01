@@ -1,3 +1,5 @@
+// Package clibase は、cobra を用いた CLI の共通のルートコマンドと
+// シグナル処理・共通フラグの組み立てを提供します。
 package clibase
 
 import (
@@ -79,7 +81,7 @@ func buildRootCmd(app App) *cobra.Command {
 
 		// 引数なしで実行された場合にヘルプを表示
 		// RunE にすることで、エラーハンドリングを上位の Execute() に委ねます
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(cmd *cobra.Command, _ []string) error {
 			return cmd.Help()
 		},
 	}
@@ -112,11 +114,19 @@ func ExecuteContext(ctx context.Context, app App) error {
 // SIGINT/SIGTERM を受信すると ctx をキャンセルするため、PreRunE/PostRun や
 // 各コマンドの Run 内で cmd.Context() を参照すれば中断処理に反応できます。
 func Execute(app App) {
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
-
-	if err := ExecuteContext(ctx, app); err != nil {
+	// os.Exit は defer を実行せずにプロセスを終えるため、シグナル購読の解除は
+	// 別関数へ閉じ込めて、終了コードの決定だけをここに残します。
+	if err := executeWithSignals(app); err != nil {
 		// Cobraがエラーを出力するため、ここでは適切な終了コードで終了します
 		os.Exit(1)
 	}
+}
+
+// executeWithSignals は SIGINT/SIGTERM の購読を伴ってアプリケーションを実行し、
+// 戻る際に必ず購読を解除します。
+func executeWithSignals(app App) error {
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	return ExecuteContext(ctx, app)
 }
