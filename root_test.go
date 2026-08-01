@@ -39,7 +39,7 @@ func TestBuildRootCmd_Basics(t *testing.T) {
 
 func TestBuildRootCmd_AddFlagsAndCommands(t *testing.T) {
 	called := false
-	sub := &cobra.Command{Use: "sub", Run: func(cmd *cobra.Command, args []string) {}}
+	sub := &cobra.Command{Use: "sub", Run: func(_ *cobra.Command, _ []string) {}}
 	app := App{
 		Name: "myapp",
 		AddFlags: func(cmd *cobra.Command) {
@@ -78,22 +78,22 @@ func TestExecuteContext_RootAndChildHooksBothFire(t *testing.T) {
 
 	child := &cobra.Command{
 		Use: "child",
-		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+		PersistentPreRunE: func(_ *cobra.Command, _ []string) error {
 			order = append(order, "child-pre")
 			return nil
 		},
-		Run: func(cmd *cobra.Command, args []string) {
+		Run: func(_ *cobra.Command, _ []string) {
 			order = append(order, "run")
 		},
 	}
 
 	app := App{
 		Name: "myapp",
-		PreRunE: func(cmd *cobra.Command, args []string) error {
+		PreRunE: func(_ *cobra.Command, _ []string) error {
 			order = append(order, "root-pre")
 			return nil
 		},
-		PostRun: func(cmd *cobra.Command, args []string) {
+		PostRun: func(_ *cobra.Command, _ []string) {
 			order = append(order, "root-post")
 		},
 		Commands: []*cobra.Command{child},
@@ -124,7 +124,7 @@ func TestExecuteContext_ReturnsErrorWithoutExiting(t *testing.T) {
 		Commands: []*cobra.Command{
 			{
 				Use: "fail",
-				RunE: func(cmd *cobra.Command, args []string) error {
+				RunE: func(_ *cobra.Command, _ []string) error {
 					return errors.New("boom")
 				},
 			},
