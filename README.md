@@ -1,5 +1,6 @@
 # 📚 CLI Base
 
+[![Status](https://img.shields.io/badge/Status-Active-brightgreen)](#)
 [![Language](https://img.shields.io/badge/Language-Go-blue)](https://golang.org/)
 [![Go Version](https://img.shields.io/github/go-mod/go-version/shouni/clibase)](https://golang.org/)
 [![GitHub tag (latest by date)](https://img.shields.io/github/v/tag/shouni/clibase)](https://github.com/shouni/clibase/tags)
